@@ -7,11 +7,21 @@ export const SESSION_MAX_AGE = 60 * 60 * 24 * 60; // 60 ngày - tài xế không
 
 export type SessionPayload = { uid: number; pv: string; exp: number };
 
-function getSecret(): string {
+let derivedSecret: Promise<string> | null = null;
+
+async function getSecret(): Promise<string> {
   const s = process.env.AUTH_SECRET;
   if (s && s.length >= 16) return s;
+  // Không cài AUTH_SECRET: tự sinh khóa từ chuỗi kết nối CSDL (vốn đã bí mật) để triển khai 1 bước
+  const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  if (dbUrl) {
+    derivedSecret ??= crypto.subtle
+      .digest("SHA-256", new TextEncoder().encode(`odo-session:${dbUrl}`))
+      .then((buf) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join(""));
+    return derivedSecret;
+  }
   if (process.env.VERCEL) {
-    throw new Error("Thiếu biến môi trường AUTH_SECRET (chuỗi ngẫu nhiên >= 32 ký tự).");
+    throw new Error("Thiếu biến môi trường AUTH_SECRET hoặc DATABASE_URL.");
   }
   return "dev-secret-chi-dung-khi-chay-local-0123456789";
 }
@@ -32,7 +42,7 @@ function fromB64url(s: string): Uint8Array {
 async function hmac(data: string): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey(
     "raw",
-    enc.encode(getSecret()),
+    enc.encode(await getSecret()),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],

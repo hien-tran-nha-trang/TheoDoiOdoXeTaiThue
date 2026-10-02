@@ -9,7 +9,8 @@ export type OcrResult = {
 };
 
 export function isServerOcrEnabled(): boolean {
-  return !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+  // Cho phép nhập tạm "none" khi chưa có key => dùng OCR trên điện thoại
+  return /^sk-/.test(process.env.ANTHROPIC_API_KEY ?? "") || !!process.env.ANTHROPIC_AUTH_TOKEN;
 }
 
 const SCHEMA = {
